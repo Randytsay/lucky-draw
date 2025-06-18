@@ -1,0 +1,555 @@
+<!DOCTYPE html>
+<html lang="zh-TW">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>🎉 互動式抽獎系統 v4.1 (功能修復版)</title>
+    <style>
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            font-family: 'Arial', sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            color: #333;
+            overflow-x: hidden;
+        }
+        .bg-animation {
+            position: fixed; width: 100%; height: 100%; top: 0; left: 0;
+            z-index: -1; opacity: 0.1; pointer-events: none;
+        }
+        .bg-animation::before {
+            content: ''; position: absolute; width: 200%; height: 200%;
+            top: -50%; left: -50%;
+            background: repeating-linear-gradient(45deg, transparent, transparent 10px, rgba(255, 255, 255, 0.1) 10px, rgba(255, 255, 255, 0.1) 20px);
+            animation: bgMove 20s linear infinite;
+        }
+        @keyframes bgMove { 100% { transform: translate(50px, 50px); } }
+        .container { max-width: 1200px; margin: 0 auto; padding: 20px; }
+        .header { text-align: center; margin-bottom: 30px; color: white; position: relative; }
+        .header h1 {
+            font-size: 2.5em; margin-bottom: 10px;
+            text-shadow: 2px 2px 4px rgba(0,0,0,0.3);
+            animation: titleGlow 2s ease-in-out infinite alternate;
+        }
+        @keyframes titleGlow {
+            from { text-shadow: 2px 2px 4px rgba(0,0,0,0.3), 0 0 10px rgba(255,255,255,0.5); }
+            to { text-shadow: 2px 2px 4px rgba(0,0,0,0.3), 0 0 20px rgba(255,255,255,0.8); }
+        }
+        .controls { text-align: center; margin-bottom: 30px; }
+        .btn {
+            background: linear-gradient(45deg, #ff6b6b, #ee5a24); color: white; border: none;
+            padding: 15px 30px; font-size: 18px; border-radius: 50px; cursor: pointer;
+            margin: 5px; transition: all 0.3s; box-shadow: 0 4px 15px rgba(0,0,0,0.2);
+            position: relative; overflow: hidden;
+        }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 6px 20px rgba(0,0,0,0.3); }
+        .btn:disabled { background: #ccc; cursor: not-allowed; transform: none; }
+        .ball-grid {
+            display: grid; grid-template-columns: repeat(auto-fit, minmax(60px, 1fr));
+            gap: 10px; margin-bottom: 30px; padding: 20px;
+            background: rgba(255, 255, 255, 0.1); border-radius: 15px; backdrop-filter: blur(10px);
+        }
+        .ball {
+            width: 60px; height: 60px; border-radius: 50%; display: flex;
+            align-items: center; justify-content: center; font-weight: bold;
+            cursor: pointer; transition: all 0.3s; position: relative;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.2); border: 2px solid transparent;
+        }
+        .ball.unassigned {
+            background: linear-gradient(145deg, #e0e0e0, #bdbdbd);
+            color: #666; cursor: not-allowed;
+        }
+        .ball.assigned {
+            background: linear-gradient(145deg, #4fc3f7, #29b6f6); color: white;
+            cursor: pointer; border-color: #0288d1;
+        }
+        .ball.opened {
+            background: linear-gradient(145deg, #ffd54f, #ffb300); color: #333;
+            animation: ballOpen 0.6s ease-out; border-color: #f57c00;
+        }
+        @keyframes ballOpen {
+            0% { transform: scale(1); } 50% { transform: scale(1.2); } 100% { transform: scale(1); }
+        }
+        .ball:hover:not(.unassigned) { transform: translateY(-5px) scale(1.1); box-shadow: 0 8px 20px rgba(0,0,0,0.3); }
+        .participant-grid {
+            display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 15px; margin-bottom: 30px;
+        }
+        .participant-card {
+            background: rgba(255, 255, 255, 0.95); padding: 15px; border-radius: 10px;
+            box-shadow: 0 2px 10px rgba(0,0,0,0.1); transition: all 0.3s;
+        }
+        .participant-card.spotlight {
+            transform: scale(1.05); box-shadow: 0 0 30px 10px #ffd700;
+        }
+        .participant-name { font-weight: bold; margin-bottom: 5px; color: #333; }
+        .participant-count { color: #666; font-size: 14px; margin-bottom: 10px; }
+        .participant-balls { display: flex; flex-wrap: wrap; gap: 5px; }
+        .mini-ball {
+            width: 30px; height: 30px; border-radius: 50%; display: flex; align-items: center;
+            justify-content: center; font-size: 12px; font-weight: bold; transition: all 0.3s; cursor: pointer;
+        }
+        #lotteryMachineContainer {
+            margin-bottom: 30px; padding: 20px; background: rgba(0, 0, 0, 0.2);
+            border-radius: 20px; backdrop-filter: blur(5px);
+        }
+        #lotteryMachine {
+            position: relative; height: 150px; border: 5px solid #fff; border-radius: 75px;
+            background: radial-gradient(circle at 50% 120%, rgba(255, 255, 255, 0.3), transparent 70%);
+            overflow: hidden; box-shadow: inset 0 0 20px rgba(0,0,0,0.5);
+        }
+        #lotteryMachine .ball {
+            position: absolute; cursor: default; animation: tumble 5s linear infinite alternate;
+        }
+        /* FIXED: Restored the full tumble animation */
+        @keyframes tumble {
+            0% { transform: translate(0, 0) rotate(0deg); }
+            25% { transform: translate(20px, -15px) rotate(90deg); }
+            50% { transform: translate(-10px, 10px) rotate(-180deg); }
+            75% { transform: translate(15px, 20px) rotate(270deg); }
+            100% { transform: translate(0, 0) rotate(360deg); }
+        }
+        .ball.flying { position: fixed; z-index: 1000; animation: none; }
+        .modal {
+            display: none; position: fixed; top: 0; left: 0; width: 100%; height: 100%;
+            background: rgba(0, 0, 0, 0.9); z-index: 1000; align-items: center;
+            justify-content: center; backdrop-filter: blur(5px); padding: 20px;
+        }
+        .gift-modal-content {
+            position: relative; width: 100%; max-width: 800px;
+            animation: modalZoomIn 0.5s ease-out;
+        }
+        @keyframes modalZoomIn { from { transform: scale(0); opacity: 0; } to { transform: scale(1); opacity: 1; } }
+        
+        .gift-image-container {
+            background: white; border-radius: 15px; overflow: hidden;
+            box-shadow: 0 10px 50px rgba(0,0,0,0.5); margin-bottom: 20px;
+        }
+        .gift-image { max-width: 100%; max-height: 50vh; display: block; margin: auto; }
+        .gift-details-grid {
+            display: grid;
+            grid-template-columns: 1fr 2fr;
+            gap: 20px;
+            align-items: center;
+            background: linear-gradient(135deg, #6a7edc, #734ea0);
+            padding: 20px;
+            border-radius: 15px;
+        }
+        .gift-number-display {
+            font-size: 120px; font-weight: bold; color: white;
+            text-shadow: 3px 3px 0px rgba(0,0,0,0.2); text-align: center;
+            line-height: 1; background: rgba(255,255,255,0.1);
+            border-radius: 15px; padding: 20px 0; border: 2px solid rgba(255,255,255,0.3);
+        }
+        .gift-winner-info { display: flex; flex-direction: column; gap: 15px; text-align: center; }
+        .gift-name { font-size: 32px; color: white; font-weight: bold; }
+        .gift-winner {
+            position: relative; background: #ffc107; color: #333; font-size: 24px;
+            font-weight: bold; padding: 10px 30px; margin: 0 auto;
+            border-radius: 4px; box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+            display: inline-block; text-shadow: 1px 1px 1px rgba(255,255,255,0.5);
+        }
+        .gift-winner::before, .gift-winner::after {
+            content: ''; position: absolute; top: 5px; width: 20px; height: 44px;
+            background: #e0a800; border-radius: 4px; z-index: -1;
+        }
+        .gift-winner::before { left: -10px; transform: rotate(-25deg); }
+        .gift-winner::after { right: -10px; transform: rotate(25deg); }
+        
+        .gift-navigation { display: flex; gap: 15px; z-index: 10; margin-top: 20px; justify-content: center;}
+        .nav-btn {
+            background: rgba(255, 255, 255, 0.2); border: 2px solid white; color: white;
+            padding: 12px 24px; border-radius: 25px; cursor: pointer; transition: all 0.3s;
+            font-size: 16px; font-weight: bold;
+        }
+        .nav-btn:hover { background: rgba(255, 255, 255, 0.3); transform: scale(1.05); }
+        .close-btn {
+            position: absolute; top: -15px; right: -15px; background: white;
+            border: none; color: #333; width: 40px; height: 40px; border-radius: 50%;
+            font-size: 24px; cursor: pointer; transition: all 0.3s; z-index: 10;
+            box-shadow: 0 4px 10px rgba(0,0,0,0.3);
+        }
+        .close-btn:hover { transform: rotate(90deg) scale(1.1); }
+        
+        .progress-container {
+            background: rgba(255, 255, 255, 0.95); padding: 20px; border-radius: 10px;
+            margin-bottom: 20px; box-shadow: 0 2px 10px rgba(0,0,0,0.1); display: none;
+        }
+        .progress-bar { background: #e0e0e0; height: 30px; border-radius: 15px; overflow: hidden; position: relative; }
+        .progress-fill {
+            background: linear-gradient(90deg, #4fc3f7, #29b6f6); height: 100%; width: 0%;
+            transition: width 0.5s ease-out; border-radius: 15px;
+        }
+        .progress-text {
+            position: absolute; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-weight: bold; color: #333; z-index: 1;
+        }
+        .result-modal-content {
+            background: white; padding: 30px; border-radius: 15px; max-width: 600px;
+            max-height: 80vh; overflow-y: auto;
+        }
+        .result-item { padding: 15px; margin-bottom: 10px; background: #f5f5f5; border-radius: 8px; }
+        .celebration-text {
+            position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%);
+            font-size: 60px; font-weight: bold; color: gold; text-shadow: 2px 2px 4px rgba(0,0,0,0.5);
+            z-index: 10000; pointer-events: none; animation: celebrationAnimation 2s ease-out forwards;
+        }
+        @keyframes celebrationAnimation {
+            0% { transform: translate(-50%, -50%) scale(0); }
+            50% { transform: translate(-50%, -50%) scale(1.5); }
+            100% { transform: translate(-50%, -50%) scale(1); opacity: 0; }
+        }
+
+        @media (max-width: 768px) {
+            .gift-details-grid { grid-template-columns: 1fr; }
+            .gift-number-display { font-size: 80px; padding: 10px 0; }
+            .gift-name { font-size: 24px; }
+            .gift-winner { font-size: 20px; }
+        }
+    </style>
+</head>
+<body>
+    <div class="bg-animation"></div>
+    <div class="container">
+        <div class="header"><h1>🎉 互動式抽獎系統 🎉</h1><p>點擊開始，見證幸運的誕生！</p></div>
+        <div class="controls">
+            <button class="btn" id="startBtn" onclick="startLottery()">🎲 開始抽獎</button>
+            <button class="btn" id="showResultBtn" onclick="showResults()" style="display: none;">📋 查看結果</button>
+            <button class="btn" onclick="resetLottery()">🔄 重置抽獎</button>
+        </div>
+        <div id="lotteryMachineContainer" style="display: none;">
+            <h2 style="text-align: center; color: white; margin-bottom: 10px;">幸運抽獎機</h2>
+            <div id="lotteryMachine"></div>
+        </div>
+        <div class="progress-container" id="progressBar">
+            <h3>開啟進度</h3>
+            <div class="progress-bar">
+                <div class="progress-fill" id="progressFill"></div>
+                <div class="progress-text"><span id="openedCount">0</span> / <span id="totalCount">0</span></div>
+            </div>
+        </div>
+        <div id="adminInfo" style="display: none; text-align: center; color: white; margin-bottom: 20px;">
+            <p>🎯 抽獎完成！點擊號碼球查看對應的禮物</p>
+        </div>
+        <div class="ball-grid" id="ballGrid"></div>
+        <h2 style="text-align: center; color: white; margin-bottom: 20px;">參與者名單</h2>
+        <div class="participant-grid" id="participantGrid"></div>
+    </div>
+
+    <div class="modal" id="giftModal">
+        <div class="gift-modal-content">
+            <button class="close-btn" onclick="closeModal('giftModal')">✕</button>
+            <div class="gift-image-container"><img class="gift-image" id="giftImage" alt="禮物圖片"></div>
+            <div class="gift-details-grid">
+                <div class="gift-number-display" id="giftNumber"></div>
+                <div class="gift-winner-info">
+                    <div class="gift-name" id="giftName"></div>
+                    <div class="gift-winner" id="giftWinner"></div>
+                </div>
+            </div>
+            <div class="gift-navigation">
+                <button class="nav-btn" onclick="previousGift()">⬅️ 上一個</button>
+                <button class="nav-btn" onclick="randomGift()">🎲 隨機</button>
+                <button class="nav-btn" onclick="nextGift()">下一個 ➡️</button>
+            </div>
+        </div>
+    </div>
+
+    <div class="modal" id="resultModal">
+        <div class="result-modal-content">
+            <button class="close-btn" onclick="closeModal('resultModal')">✕</button>
+            <h2 style="text-align: center; margin-bottom: 20px;">🏆 抽獎結果總覽</h2>
+            <div id="resultContent"></div>
+            <div style="text-align: center; margin-top: 20px;"><button class="btn" onclick="copyResults()">📋 複製結果</button></div>
+        </div>
+    </div>
+
+    <script>
+        const participants = [
+            { name: '郭重麟', count: 2 }, { name: '陳筱蓉', count: 2 }, { name: '陸嘉萍', count: 1 },
+            { name: '蘇宥緁', count: 3 }, { name: '廖婕蕎', count: 10}, { name: '郭秋霞', count: 4 },
+            { name: '白姍靈', count: 1 }, { name: '黃秀清', count: 5 }, { name: '溫怡珺', count: 1 },
+            { name: '楊芷晴', count: 5 }, { name: '張頌芬', count: 1 }, { name: '徐一禎', count: 1 },
+            { name: '李瑞洵', count: 1 }, { name: '耀文&卉羚', count: 2}, { name: '葉柔君', count: 0 }
+        ];
+        const prizeConfig = {
+            1:{name:"姍靈獎",image:"./images/姍靈.jpg"},2:{name:"姍靈獎",image:"./images/姍靈.jpg"},3:{name:"姍靈獎",image:"./images/姍靈.jpg"},4:{name:"姍靈獎",image:"./images/姍靈.jpg"},5:{name:"姍靈獎",image:"./images/姍靈.jpg"},6:{name:"秋霞獎",image:"./images/秋霞.jpg"},7:{name:"秋霞獎",image:"./images/秋霞.jpg"},8:{name:"秋霞獎",image:"./images/秋霞.jpg"},9:{name:"秋霞獎",image:"./images/秋霞.jpg"},10:{name:"秋霞獎",image:"./images/秋霞.jpg"},11:{name:"頌芬獎",image:"./images/頌芬.jpg"},12:{name:"秋鳳獎",image:"./images/秋鳳.jpg"},13:{name:"秋鳳獎",image:"./images/秋鳳.jpg"},14:{name:"秋鳳獎",image:"./images/秋鳳.jpg"},15:{name:"慧芳獎",image:"./images/慧芳.jpg"},16:{name:"怡珺獎",image:"./images/怡珺.jpg"},17:{name:"怡珺獎",image:"./images/怡珺.jpg"},18:{name:"怡珺獎",image:"./images/怡珺.jpg"},19:{name:"耀文獎",image:"./images/耀文.jpg"},20:{name:"耀文獎",image:"./images/耀文.jpg"},21:{name:"耀文獎",image:"./images/耀文.jpg"},22:{name:"耀文獎",image:"./images/耀文.jpg"},23:{name:"耀文獎",image:"./images/耀文.jpg"},24:{name:"琳婕獎",image:"./images/琳婕.jpg"},25:{name:"超級8",image:"./images/25.jpg"},26:{name:"黯陰羊",image:"./images/26.jpg"},27:{name:"心靈雞湯",image:"./images/27.jpg"},28:{name:"黑蘭嬌",image:"./images/28.jpg"},29:{name:"精力充沛",image:"./images/29.jpg"},30:{name:"保送入學",image:"./images/30.jpg"},31:{name:"倒退嚕",image:"./images/31.jpg"},32:{name:"沉默羔羊",image:"./images/32.jpg"},33:{name:"深夜貓頭鷹",image:"./images/33.jpg"},34:{name:"萬人喝采",image:"./images/34.jpg"},35:{name:"汪汪隊立大功",image:"./images/35.jpg"},36:{name:"兒時記憶",image:"./images/36.jpg"},37:{name:"光榮時刻",image:"./images/37.jpg"},38:{name:"24笑",image:"./images/38.jpg"},39:{name:"初戀的滋味",image:"./images/39.jpg"},40:{name:"Lucky7",image:"./images/40.jpg"},41:{name:"星光大道",image:"./images/41.jpg"},42:{name:"紅衣小女孩",image:"./images/42.jpg"},43:{name:"煥然一新",image:"./images/43.jpg"},44:{name:"三角飯糰",image:"./images/44.jpg"},45:{name:"窈窕動人",image:"./images/45.jpg"}
+        };
+
+        let isLotteryStarted = false, lotteryResults = {}, ballOwners = {}, openedGifts = new Set(), allAssignedBalls = [], currentGiftBall = null;
+        const activeParticipants = participants.filter(p => p.count > 0);
+
+        function initSystem() {
+            generateBalls();
+            generateParticipantCards();
+            setupEventListeners();
+            prepareLotteryMachine();
+        }
+
+        function setupEventListeners() {
+            document.getElementById('ballGrid').addEventListener('click', (e) => {
+                if (e.target.matches('.ball.assigned, .ball.opened')) {
+                    handleBallClick(parseInt(e.target.textContent));
+                }
+            });
+            document.getElementById('participantGrid').addEventListener('click', (e) => {
+                if (e.target.classList.contains('mini-ball') && ballOwners[parseInt(e.target.textContent)]) {
+                    handleBallClick(parseInt(e.target.textContent));
+                }
+            });
+            document.addEventListener('keydown', (e) => {
+                if (document.getElementById('giftModal').style.display === 'flex') {
+                    if (e.key === 'Escape') closeModal('giftModal');
+                    if (e.key === 'ArrowLeft') previousGift();
+                    if (e.key === 'ArrowRight') nextGift();
+                }
+            });
+        }
+
+        function generateBalls() {
+            const ballGrid = document.getElementById('ballGrid');
+            ballGrid.innerHTML = '';
+            for (let i = 1; i <= 45; i++) {
+                const ball = document.createElement('div');
+                ball.className = 'ball unassigned';
+                ball.textContent = i;
+                ball.id = `ball-${i}`;
+                ballGrid.appendChild(ball);
+            }
+        }
+        
+        function prepareLotteryMachine() {
+            const machine = document.getElementById('lotteryMachine');
+            machine.innerHTML = '';
+            for (let i = 1; i <= 45; i++) {
+                const ball = document.createElement('div');
+                ball.className = 'ball unassigned';
+                ball.textContent = i;
+                ball.id = `machine-ball-${i}`;
+                // FIXED: Restore random positioning
+                ball.style.left = `${10 + Math.random() * 80}%`;
+                ball.style.top = `${10 + Math.random() * 60}%`;
+                ball.style.animationDelay = `${Math.random() * -5}s`;
+                machine.appendChild(ball);
+            }
+        }
+
+        function generateParticipantCards() {
+            const participantGrid = document.getElementById('participantGrid');
+            participantGrid.innerHTML = '';
+            activeParticipants.forEach(p => {
+                const card = document.createElement('div');
+                card.className = 'participant-card';
+                card.innerHTML = `<div class="participant-name">${p.name}</div><div class="participant-count">抽獎資格：${p.count}</div><div class="participant-balls" id="balls-${p.name}"></div>`;
+                participantGrid.appendChild(card);
+            });
+        }
+
+        function startLottery() {
+            if (isLotteryStarted) return;
+            document.getElementById('startBtn').disabled = true;
+            isLotteryStarted = true;
+
+            const allBalls = Array.from({length: 45}, (_, i) => i + 1);
+            const priorityBalls = allBalls.filter(n => n >= 24).sort(() => Math.random() - 0.5);
+            const standardBalls = allBalls.filter(n => n < 24).sort(() => Math.random() - 0.5);
+            
+            const assignments = [];
+            activeParticipants.forEach(p => {
+                const wonPrizes = new Set();
+                for (let i = 0; i < p.count; i++) {
+                    const ballNumber = findUniquePrizeBall(wonPrizes, priorityBalls, standardBalls);
+                    if (ballNumber) {
+                        assignments.push({ participant: p.name, ball: ballNumber });
+                        ballOwners[ballNumber] = p.name;
+                        if (!lotteryResults[p.name]) lotteryResults[p.name] = [];
+                        lotteryResults[p.name].push(ballNumber);
+                        allAssignedBalls.push(ballNumber);
+                        wonPrizes.add(prizeConfig[ballNumber].name);
+                    }
+                }
+            });
+            allAssignedBalls.sort((a, b) => a - b);
+
+            document.getElementById('lotteryMachineContainer').style.display = 'block';
+            document.getElementById('progressBar').style.display = 'block';
+            document.getElementById('totalCount').textContent = allAssignedBalls.length;
+            showCelebrationText('🎉 開獎啦！🎉');
+            
+            let delay = 0;
+            assignments.sort(() => Math.random() - 0.5);
+            assignments.forEach((assignment, index) => {
+                setTimeout(() => {
+                    animateBallFly(assignment.ball, assignment.participant);
+                    if (index === assignments.length - 1) {
+                        setTimeout(() => {
+                            document.getElementById('showResultBtn').style.display = 'inline-block';
+                            document.getElementById('adminInfo').style.display = 'block';
+                            showCelebrationText('🎊 開獎完成！🎊');
+                        }, 1000);
+                    }
+                }, delay);
+                delay += 100;
+            });
+        }
+        
+        function findUniquePrizeBall(wonPrizes, priorityBalls, standardBalls) {
+            for (let i = 0; i < priorityBalls.length; i++) {
+                if (!wonPrizes.has(prizeConfig[priorityBalls[i]].name)) {
+                    return priorityBalls.splice(i, 1)[0];
+                }
+            }
+            for (let i = 0; i < standardBalls.length; i++) {
+                if (!wonPrizes.has(prizeConfig[standardBalls[i]].name)) {
+                    return standardBalls.splice(i, 1)[0];
+                }
+            }
+            if (priorityBalls.length > 0) return priorityBalls.pop();
+            if (standardBalls.length > 0) return standardBalls.pop();
+            return null;
+        }
+
+        function animateBallFly(ballNumber, participantName) {
+            const machineBall = document.getElementById(`machine-ball-${ballNumber}`);
+            const gridBall = document.getElementById(`ball-${ballNumber}`);
+            if (!machineBall || !gridBall) return;
+            const startRect = machineBall.getBoundingClientRect(), endRect = gridBall.getBoundingClientRect();
+            const flyingBall = machineBall.cloneNode(true);
+            flyingBall.className = 'ball flying';
+            flyingBall.style.left = `${startRect.left}px`;
+            flyingBall.style.top = `${startRect.top}px`;
+            document.body.appendChild(flyingBall);
+            machineBall.style.opacity = '0';
+            flyingBall.animate([
+                { transform: `translate(0, 0) scale(1.2)` },
+                { transform: `translate(${endRect.left - startRect.left}px, ${endRect.top - startRect.top}px) scale(1)` }
+            ], { duration: 800, easing: 'ease-in-out' }).onfinish = () => {
+                flyingBall.remove();
+                gridBall.className = 'ball assigned';
+                updateParticipantCard(participantName, ballNumber);
+                const winnerCard = document.getElementById(`balls-${participantName}`).closest('.participant-card');
+                if (winnerCard) {
+                    winnerCard.classList.add('spotlight');
+                    setTimeout(() => winnerCard.classList.remove('spotlight'), 1500);
+                }
+            };
+        }
+
+        function updateParticipantCard(participantName, ballNumber) {
+            const ballsContainer = document.getElementById(`balls-${participantName}`);
+            if (ballsContainer) {
+                const miniBall = document.createElement('div');
+                miniBall.className = 'mini-ball assigned';
+                miniBall.textContent = ballNumber;
+                miniBall.style.background = 'linear-gradient(145deg, #4fc3f7, #29b6f6)';
+                miniBall.style.color = 'white';
+                ballsContainer.appendChild(miniBall);
+            }
+        }
+        
+        function handleBallClick(ballNumber) {
+            if (!isLotteryStarted || !ballOwners[ballNumber]) return;
+            openGift(ballNumber);
+        }
+
+        function openGift(ballNumber) {
+            if (!openedGifts.has(ballNumber)) {
+                openedGifts.add(ballNumber);
+                document.getElementById(`ball-${ballNumber}`).className = 'ball opened';
+                updateProgress();
+                document.querySelectorAll('.mini-ball').forEach(mb => {
+                    if (parseInt(mb.textContent) === ballNumber) {
+                        mb.style.background = 'linear-gradient(145deg, #ffd54f, #ffb300)';
+                        mb.style.color = '#333';
+                    }
+                });
+            }
+            currentGiftBall = ballNumber;
+            const prize = prizeConfig[ballNumber];
+            document.getElementById('giftNumber').textContent = ballNumber;
+            document.getElementById('giftName').textContent = prize.name;
+            document.getElementById('giftWinner').textContent = `得主：${ballOwners[ballNumber]}`;
+            document.getElementById('giftImage').src = prize.image;
+            document.getElementById('giftModal').style.display = 'flex';
+        }
+
+        // FIXED: All helper functions below are restored
+        function updateProgress() {
+            const total = allAssignedBalls.length;
+            const opened = openedGifts.size;
+            const percentage = total > 0 ? (opened / total) * 100 : 0;
+            document.getElementById('progressFill').style.width = `${percentage}%`;
+            document.getElementById('openedCount').textContent = opened;
+        }
+
+        function resetLottery() {
+            if (confirm('確定要重置抽獎嗎？所有資料將被清除！')) {
+                isLotteryStarted = false;
+                lotteryResults = {}; ballOwners = {}; openedGifts.clear(); allAssignedBalls = [];
+                document.getElementById('startBtn').disabled = false;
+                ['showResultBtn', 'adminInfo', 'progressBar', 'lotteryMachineContainer'].forEach(id => {
+                    document.getElementById(id).style.display = 'none';
+                });
+                closeModal('giftModal'); closeModal('resultModal');
+                initSystem();
+            }
+        }
+
+        function showResults() {
+            const content = document.getElementById('resultContent');
+            let html = '<div style="max-height: 400px; overflow-y: auto;">';
+            Object.keys(lotteryResults).sort().forEach(name => {
+                const balls = lotteryResults[name].sort((a,b) => a - b);
+                if (balls.length > 0) {
+                     html += `<div class="result-item"><strong>${name}</strong> (${balls.length}次)<br>號碼球：${balls.join(', ')}<br>獎項：${balls.map(ball => prizeConfig[ball].name).join(', ')}</div>`;
+                }
+            });
+            html += '</div>';
+            content.innerHTML = html;
+            document.getElementById('resultModal').style.display = 'flex';
+        }
+        
+        function closeModal(modalId) { document.getElementById(modalId).style.display = 'none'; }
+        
+        function copyResults() {
+            let text = '🎉 抽獎結果總覽\n\n';
+            Object.keys(lotteryResults).sort().forEach(name => {
+                const balls = lotteryResults[name].sort((a,b) => a - b);
+                if(balls.length > 0) {
+                    text += `${name} (${balls.length}次)\n號碼球：${balls.join(', ')}\n獎項：${balls.map(ball => prizeConfig[ball].name).join(', ')}\n\n`;
+                }
+            });
+            navigator.clipboard.writeText(text).then(() => alert('結果已複製到剪貼簿！'));
+        }
+
+        function previousGift() {
+            if (!currentGiftBall || allAssignedBalls.length === 0) return;
+            const currentIndex = allAssignedBalls.indexOf(currentGiftBall);
+            const nextIndex = (currentIndex - 1 + allAssignedBalls.length) % allAssignedBalls.length;
+            openGift(allAssignedBalls[nextIndex]);
+        }
+
+        function nextGift() {
+            if (!currentGiftBall || allAssignedBalls.length === 0) return;
+            const currentIndex = allAssignedBalls.indexOf(currentGiftBall);
+            const nextIndex = (currentIndex + 1) % allAssignedBalls.length;
+            openGift(allAssignedBalls[nextIndex]);
+        }
+
+        function randomGift() {
+            if (allAssignedBalls.length === 0) return;
+            openGift(allAssignedBalls[Math.floor(Math.random() * allAssignedBalls.length)]);
+        }
+
+        function showCelebrationText(text) {
+            const el = document.createElement('div');
+            el.className = 'celebration-text';
+            el.textContent = text;
+            document.body.appendChild(el);
+            setTimeout(() => el.remove(), 2000);
+        }
+        
+        window.onload = initSystem;
+    </script>
+</body>
+</html>
