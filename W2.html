@@ -384,41 +384,56 @@
 		function startLottery() {
 			if (isLotteryStarted) return;
 			resetLottery(false);
+
+			// --- A. 防衝突檢查 ---
+			const prizeProviders = Object.values(prizeConfig).map(p => p.provider);
+			for (const p of participants) {
+				const providedByP = prizeProviders.filter(provider => provider === p.name).length;
+				const availableToP = TOTAL_BALLS - providedByP;
+				if (p.count > availableToP) {
+					alert(`抽獎設定錯誤！\n參與者 "${p.name}" 的抽獎次數 (${p.count}) 大於他/她可以抽的獎品總數 (${availableToP})。\n請調整獎品提供者或抽獎次數。`);
+					return;
+				}
+			}
+
 			isLotteryStarted = true;
 			document.getElementById('startBtn').disabled = true;
 
-			// 獎池中有所有可用的號碼球
 			let availableBalls = Array.from({ length: TOTAL_BALLS }, (_, i) => i + 1);
 			const assignments = [];
 
-			// 依次為每位參與者抽獎
+			// --- B. 智慧型抽獎演算法 ---
 			participants.forEach(p => {
-				// 為這位參與者記錄已抽中的獎品名稱
-				const wonPrizeNames = new Set(); 
-
+				const wonPrizeNames = new Set();
 				for (let i = 0; i < p.count; i++) {
-					if (availableBalls.length === 0) break; // 如果沒球了就停止
+					if (availableBalls.length === 0) break;
 
-					// 1. 優先尋找一個尚未擁有的獎品種類
 					let ballToAssign = -1;
 					let ballIndex = -1;
+					
+					availableBalls.sort(() => Math.random() - 0.5); // 增加隨機性
 
-					// 打亂當前獎池來增加隨機性
-					availableBalls.sort(() => Math.random() - 0.5);
+					// 1. 第一優先：找一個「不是自己送的」＋「沒抽過的種類」
+					ballIndex = availableBalls.findIndex(ballNum => 
+						prizeConfig[ballNum].provider !== p.name && 
+						!wonPrizeNames.has(prizeConfig[ballNum].name)
+					);
 
-					ballIndex = availableBalls.findIndex(ballNum => !wonPrizeNames.has(prizeConfig[ballNum].name));
-
-					// 2. 如果找不到（表示剩下的都是重複的），就隨便抽一個
+					// 2. 第二優先：如果找不到，找一個只要「不是自己送的」
 					if (ballIndex === -1) {
-						ballIndex = 0; // 就拿第一個
+						ballIndex = availableBalls.findIndex(ballNum => prizeConfig[ballNum].provider !== p.name);
+					}
+					
+					// 正常情況下因為有防衝突檢查，一定會找到。但以防萬一，如果還找不到就拿第一個。
+					if (ballIndex === -1) {
+						ballIndex = 0;
 					}
 
 					ballToAssign = availableBalls[ballIndex];
 					
-					// 3. 分配獎品
-					availableBalls.splice(ballIndex, 1); // 從獎池中移除這個球
+					availableBalls.splice(ballIndex, 1);
 					const prizeName = prizeConfig[ballToAssign].name;
-					wonPrizeNames.add(prizeName); // 記錄已抽中的獎品名稱
+					wonPrizeNames.add(prizeName);
 
 					assignments.push({ participant: p.name, ball: ballToAssign });
 					ballOwners[ballToAssign] = p.name;
