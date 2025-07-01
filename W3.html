@@ -3,7 +3,7 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>幸運大轉盤 - 豪華版</title>
+    <title>BV點數集集樂</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <link rel="preconnect" href="https://fonts.googleapis.com">
     <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -57,10 +57,12 @@
             -webkit-background-clip: text;
             -webkit-text-fill-color: transparent;
             background-clip: text;
+            /* 調整：減弱靜態光暈 */
             text-shadow: 0 0 15px rgba(255, 215, 0, 0.4);
             animation: titleGlow 2s ease-in-out infinite alternate;
         }
         
+        /* 調整：減弱動態光暈 */
         @keyframes titleGlow {
             from { filter: drop-shadow(0 0 5px #ffd700); }
             to { filter: drop-shadow(0 0 12px #ffd700); }
@@ -273,6 +275,7 @@
     <div class="particles" id="particles"></div>
     
     <div class="main-content flex flex-col items-center">
+        <!-- 調整：更換標題 -->
         <h1 class="title text-5xl md:text-7xl font-black mb-4 text-center">🎊 BV點數集集樂 🎊</h1>
         <div class="prize-count mb-8">
             <p id="prize-count" class="text-xl font-bold text-yellow-300"></p>
@@ -297,8 +300,8 @@
             <div class="text-center">
                 <div class="text-6xl mb-4">🎉</div>
                 <h2 class="text-4xl font-bold text-yellow-300 mb-6">恭喜中獎！</h2>
-                
-				<img id="prize-image" src="" alt="獎品圖片" class="max-w-full max-h-[80vh] object-contain rounded-xl shadow-2xl border-4 border-yellow-400">
+
+				<img id="prize-image" src="" alt="獎品圖片" class="max-w-full max-h-[70vh] object-contain rounded-xl shadow-2xl border-4 border-yellow-400">
                 <div class="text-2xl mt-4 text-yellow-200" id="prize-name"></div>
             </div>
             <button id="close-modal" class="absolute top-8 right-8 text-white text-6xl font-bold hover:text-yellow-300 transition-colors">&times;</button>
@@ -306,18 +309,25 @@
     </div>
 
     <!-- 音效檔案 -->
-    <audio id="spinSound" src="wheel.MP3" preload="auto"></audio>
-    <audio id="winSound" src="ha.MP3" preload="auto"></audio>
+    <audio id="spinSound" src="wheel.mp3" preload="auto"></audio>
+    <audio id="winSound" src="ha.mp3" preload="auto"></audio>
 
     <script>
         // --- 設定 ---
+        // 調整：移除固定的顏色，讓程式動態分配
         const prizes = [
-            { name: '姍靈獎', quantity: 1, color: '#ff6b6b' },
-            { name: '秋霞獎', quantity: 2, color: '#48dbfb' },
-            { name: '芳芳獎', quantity: 1, color: '#f9ca24', imageName: '慧芳' },
-            { name: '秋鳳獎', quantity: 1, color: '#ff9ff3' },
-            { name: '耀文獎', quantity: 1, color: '#7ed6df' },
-            { name: '凱媽獎', quantity: 1, color: '#e056fd', imageName: '怡珺' }
+            { name: '姍靈獎', quantity: 1 },
+            { name: '秋霞獎', quantity: 2 },
+            { name: '芳芳獎', quantity: 1, imageName: '慧芳' },
+            { name: '秋鳳獎', quantity: 1 },
+            { name: '耀文獎', quantity: 1 },
+            { name: '凱媽獎', quantity: 1, imageName: '怡珺' }
+        ];
+
+        // 調整：新增一個柔和且對比清晰的調色盤
+        const colorPalette = [
+            '#ffadad', '#ffd6a5', '#fdffb6', '#caffbf', '#9bf6ff', '#a0c4ff', '#bdb2ff', '#ffc6ff',
+            '#ff8a80', '#ffb480', '#f2f2a8', '#a3e6a3', '#82e0e0', '#8cb3ff', '#a49ee6', '#ffadd2'
         ];
 
         // --- DOM 元素 ---
@@ -340,10 +350,9 @@
 
         // --- 特效函式 ---
         
-        // 創建星空背景
         function createStars() {
             const starsContainer = document.getElementById('stars');
-            if (starsContainer.children.length > 0) return; // 避免重複創建
+            if (starsContainer.children.length > 0) return;
             for (let i = 0; i < 100; i++) {
                 const star = document.createElement('div');
                 star.className = 'star';
@@ -356,7 +365,6 @@
             }
         }
         
-        // 創建粒子爆炸效果
         function createParticleExplosion(x, y, color) {
             const particlesContainer = document.getElementById('particles');
             for (let i = 0; i < 30; i++) {
@@ -396,6 +404,14 @@
                 }
             });
 
+            // 調整：為每個獎項分配獨立顏色
+            const shuffledColors = [...colorPalette];
+            shuffle(shuffledColors);
+            flatPrizes.forEach((prize, i) => {
+                prize.color = shuffledColors[i % shuffledColors.length];
+            });
+
+
             let areAdjacent = true;
             let attempts = 0;
             while(areAdjacent && attempts < 50) {
@@ -419,17 +435,17 @@
             prizeCountDisplay.textContent = `剩餘獎項：${availablePrizes.length}`;
         }
 
-        function drawWheel() {
+        function drawWheel(logicalSize) {
             const numSegments = availablePrizes.length;
             if (numSegments === 0) {
-                drawEmptyWheel();
+                drawEmptyWheel(logicalSize);
                 return;
             };
 
             const anglePerSegment = (2 * Math.PI) / numSegments;
-            const radius = wheelCanvas.width / 2;
+            const radius = logicalSize / 2;
 
-            ctx.clearRect(0, 0, wheelCanvas.width, wheelCanvas.height);
+            ctx.clearRect(0, 0, logicalSize, logicalSize);
             ctx.font = `bold ${radius * 0.11}px 'Noto Sans TC'`;
             ctx.textBaseline = 'middle';
             ctx.textAlign = 'center';
@@ -440,20 +456,20 @@
 
                 ctx.beginPath();
                 ctx.moveTo(radius, radius);
-                ctx.arc(radius, radius, radius - 5, startAngle, endAngle);
+                ctx.arc(radius, radius, radius - 2, startAngle, endAngle);
                 ctx.closePath();
                 ctx.fillStyle = prize.color;
                 ctx.fill();
                 
                 ctx.strokeStyle = '#2d3748';
-                ctx.lineWidth = 4;
+                ctx.lineWidth = 2; 
                 ctx.stroke();
 
                 // 繪製文字
                 ctx.save();
                 ctx.fillStyle = 'rgba(0, 0, 0, 0.8)';
                 ctx.shadowColor = "white";
-                ctx.shadowBlur = 5;
+                ctx.shadowBlur = 2; 
                 const textAngle = startAngle + anglePerSegment / 2;
                 ctx.translate(radius + Math.cos(textAngle) * (radius * 0.6), radius + Math.sin(textAngle) * (radius * 0.6));
                 ctx.rotate(textAngle + Math.PI / 2);
@@ -462,23 +478,23 @@
             });
         }
         
-        function drawEmptyWheel() {
-            const radius = wheelCanvas.width / 2;
-            ctx.clearRect(0, 0, wheelCanvas.width, wheelCanvas.height);
+        function drawEmptyWheel(logicalSize) {
+            const radius = logicalSize / 2;
+            ctx.clearRect(0, 0, logicalSize, logicalSize);
             
             const gradient = ctx.createRadialGradient(radius, radius, 0, radius, radius, radius);
             gradient.addColorStop(0, '#4a5568');
             gradient.addColorStop(1, '#2d3748');
             
             ctx.beginPath();
-            ctx.arc(radius, radius, radius - 5, 0, 2 * Math.PI);
+            ctx.arc(radius, radius, radius - 2, 0, 2 * Math.PI);
             ctx.fillStyle = gradient;
             ctx.fill();
             
             ctx.font = `bold ${radius * 0.12}px 'Noto Sans TC'`;
             ctx.fillStyle = '#ffd700';
             ctx.strokeStyle = '#1a202c';
-            ctx.lineWidth = 3;
+            ctx.lineWidth = 1.5; 
             ctx.textAlign = 'center';
             ctx.textBaseline = 'middle';
             ctx.strokeText('🎊 獎項已抽完！🎊', radius, radius);
@@ -545,7 +561,7 @@
 
         function closeModal() {
             prizeModal.classList.add('hidden');
-            drawWheel();
+            setupAndDrawCanvas();
             if (availablePrizes.length > 0) {
                 spinButton.disabled = false;
                 spinButton.textContent = '🎲 開始抽獎 🎲';
@@ -554,14 +570,25 @@
             }
         }
 
+        function setupAndDrawCanvas() {
+            const logicalSize = Math.min(window.innerWidth * 0.9, 600);
+            const dpr = window.devicePixelRatio || 1;
+
+            wheelCanvas.width = logicalSize * dpr;
+            wheelCanvas.height = logicalSize * dpr;
+
+            wheelCanvas.style.width = `${logicalSize}px`;
+            wheelCanvas.style.height = `${logicalSize}px`;
+
+            ctx.scale(dpr, dpr);
+
+            drawWheel(logicalSize);
+        }
+
         function init() {
-            const size = Math.min(window.innerWidth * 0.9, 600);
-            wheelCanvas.width = size;
-            wheelCanvas.height = size;
-            
             createStars();
             initializePrizes();
-            drawWheel();
+            setupAndDrawCanvas();
 
             spinButton.addEventListener('click', spin);
             closeModalButton.addEventListener('click', closeModal);
@@ -573,12 +600,7 @@
         }
 
         window.onload = init;
-        window.onresize = () => {
-            const size = Math.min(window.innerWidth * 0.9, 600);
-            wheelCanvas.width = size;
-            wheelCanvas.height = size;
-            drawWheel();
-        };
+        window.onresize = setupAndDrawCanvas;
 
     </script>
 </body>
